@@ -3,17 +3,20 @@ import pandas as pd
 import numpy as np
 import pickle
 
-import sys
+import sys, os
 sys.path.append('./')
 import util.argparser as parser
 from util import util
 
 
-def read_src_data(ffolder):
-    filename = '%s/orig.csv' % ffolder
-    df = pd.read_csv(filename, sep='\t')
-    del df['Glottocode']
-    df = df[df.Language_ID != 'cmn']
+def read_src_data(language):
+    filename = '../eval2/data/g2p/%s.tsv' % language
+    df = pd.read_csv(filename, sep='\t', names=['base', 'baseIPA', 'Concept', 'IPA', 'type'])
+    # del df['Glottocode']
+    df.insert(5, 'Language_ID', language)
+    df.insert(0, 'Concept_ID', range(len(df)))
+    df['Concept_ID'] = df.groupby(df.base).grouper.group_info[0]
+    # df = df[df.Language_ID != 'cmn']
     df = df.dropna()
     return df
 
@@ -41,13 +44,16 @@ def separate_train(df):
 
     num_sentences = phrases.size
 
-    train_size = int(num_sentences * .8)
-    val_size = int(num_sentences * .1)
-    test_size = num_sentences - train_size - val_size
+    # train_size = int(num_sentences * .8)
+    # val_size = int(num_sentences * .1)
+    # test_size = num_sentences - train_size - val_size
+    train_size = 0
+    val_size = 0
+    test_size = num_sentences
 
-    train_set = phrases[:train_size]
-    val_set = phrases[train_size:-test_size]
-    test_set = phrases[-test_size:]
+    train_set = []
+    val_set = []
+    test_set = phrases
     data_split = (train_set, val_set, test_set)
 
     train_df, val_df, test_df = separate_df(df, train_set, val_set, test_set)
@@ -100,13 +106,13 @@ def get_concept_ids(df):
 
 
 def process_languages(languages_df, token_map, args):
-    util.mkdir('%s/preprocess/' % args.ffolder)
+    util.mkdir('%s/preprocess/' % (args.ffolder))
     for lang, df in languages_df.items():
         process_language(df, token_map, lang, args)
 
 
 def process_language(dfs, token_map, lang, args):
-    for mode in ['train', 'val', 'test']:
+    for mode in ['test']:
         process_language_mode(dfs[mode], token_map, lang, mode, args)
 
 
@@ -133,6 +139,8 @@ def parse_data(df, token_map):
 
 
 def save_data(data, lang, mode, ffolder):
+    if mode == 'test':
+        mode == 'eval'
     with open('%s/preprocess/data-%s-%s.npy' % (ffolder, lang, mode), 'wb') as f:
         np.save(f, data)
 
@@ -145,12 +153,23 @@ def save_info(ffolder, languages, token_map, data_split, concepts_ids, IPA_to_co
         'concepts_ids': concepts_ids,
         'IPA_to_concept': IPA_to_concept,
     }
-    with open('%s/preprocess/info.pckl' % ffolder, 'wb') as f:
+    with open('%s/preprocess/info.pckl' % (ffolder), 'wb') as f:
         pickle.dump(info, f)
 
 
 def load_info(args):
-    with open('%s/preprocess/info.pckl' % args.ffolder, 'rb') as f:
+    with open('%s/preprocess/info.pckl' % (args.ffolder), 'rb') as f:
+        info = pickle.load(f)
+    languages = info['languages']
+    token_map = info['token_map']
+    data_split = info['data_split']
+    concept_ids = info['concepts_ids']
+    ipa_to_concept = info['IPA_to_concept']
+
+    return languages, token_map, data_split, concept_ids, ipa_to_concept
+
+def load_base_info(args):
+    with open('datasets/northeuralex/preprocess/info.pckl', 'rb') as f:
         info = pickle.load(f)
     languages = info['languages']
     token_map = info['token_map']
@@ -162,21 +181,26 @@ def load_info(args):
 
 
 def main(args):
-    df = read_src_data(args.ffolder)
+    args.ffolder = args.ffolder + '/' + args.language
+    df = read_src_data(args.language)
     print(df)
+
+    _, token_map, _, _, _ = load_base_info(args)
 
     languages = get_languages(df)
     train_df, val_df, test_df, data_split = separate_train(df)
-    token_map = get_tokens(df)
+    # token_map = get_tokens(df)
     concepts_ids, IPA_to_concept = get_concept_ids(df)
 
     languages_df = separate_per_language(train_df, val_df, test_df, languages)
 
     process_languages(languages_df, token_map, args)
+    # os.makedirs(args.ffolder + '/' + args.language + '/' + 'preprocess')
     save_info(args.ffolder, languages, token_map, data_split, concepts_ids, IPA_to_concept)
 
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    assert args.data == 'northeuralex', 'this script should only be run with northeuralex data'
+    print(args)
+    assert args.data == 'unimorph', 'this script should only be run with unimorph data'
     main(args)

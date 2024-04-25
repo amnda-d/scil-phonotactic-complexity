@@ -29,6 +29,14 @@ parser.add_argument('--results-path', type=str, default='results',
 parser.add_argument('--seed', type=int, default=7,
                     help='Seed for random algorithms repeatability (default: 7)')
 
+parser.add_argument('--eval', action='store_true', default=False,
+                    help='evaluate data')
+parser.add_argument('--language', type=str)
+parser.add_argument('--statedict', type=str)
+
+parser.add_argument('--params', type=str)
+
+
 
 def add_argument(*args, **kwargs):
     return parser.add_argument(*args, **kwargs)

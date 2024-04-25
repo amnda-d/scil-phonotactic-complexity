@@ -4,6 +4,7 @@ import math
 import csv
 from tqdm import tqdm
 import io
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -28,10 +29,17 @@ results_per_position_per_word = \
      list(range(30))]
 
 
-def get_data_loaders(lang):
-    train_loader = get_data_loader(lang, 'train')
-    val_loader = get_data_loader(lang, 'val')
-    test_loader = get_data_loader(lang, 'test')
+def get_data_loaders(lang, eval):
+    if eval:
+        with open('datasets/unimorph/%s/preprocess/data-%s-test.npy' % (lang, lang), 'rb') as f:
+            data = np.load(f)
+            test_loader = convert_to_loader(data, 'test')
+            val_loader = None
+            train_loader = None
+    else:
+        train_loader = get_data_loader(lang, 'train')
+        val_loader = get_data_loader(lang, 'val')
+        test_loader = get_data_loader(lang, 'test')
 
     return train_loader, val_loader, test_loader
 
@@ -63,6 +71,7 @@ def read_info():
     concept_ids = info['concepts_ids']
     ipa_to_concept = info['IPA_to_concept']
 
+    print(token_map)
     return languages, token_map, data_split, concept_ids, ipa_to_concept
 
 
@@ -154,9 +163,16 @@ def eval_per_word(lang, data_loader, model, token_map, ipa_to_concept, model_nam
     val_loss = val_loss / total_sent
     val_acc = val_acc / total_sent
 
-    write_csv(results_per_position, '%s/%s__results-per-position.csv' % (args.rfolder, model_name))
-    write_csv(results_per_position_per_word, '%s/%s__results-per-position-per-word.csv' % (args.rfolder, model_name))
-    write_csv(results_per_word, '%s/%s__results-per-word.csv' % (args.rfolder, model_name))
+    if args.eval:
+        Path('%s/%s' % (args.rfolder, lang)).mkdir(parents=True, exist_ok=True)
+        feval = '-eval'
+    else:
+        feval = ''
+        lang = ''
+
+    write_csv(results_per_position, '%s/%s/%s__results-per-position%s.csv' % (args.rfolder, lang, model_name, feval))
+    write_csv(results_per_position_per_word, '%s/%s/%s__results-per-position-per-word%s.csv' % (args.rfolder, lang, model_name, feval))
+    write_csv(results_per_word, '%s/%s/%s__results-per-word%s.csv' % (args.rfolder, lang, model_name, feval))
 
     return val_loss, val_acc, results_per_word
 
@@ -184,9 +200,9 @@ def _idx_to_word(word, token_map, ignored_tokens):
     return idx_to_word(word, token_map_inv, ignored_tokens)
 
 
-def train(train_loader, val_loader, test_loader, model, loss, optimizer, wait_epochs=50):
+def train(train_loader, val_loader, test_loader, model, loss, optimizer, language, wait_epochs=50):
     epoch, best_epoch, best_loss, best_acc = 0, 0, float('inf'), 0.0
-
+    
     pbar = tqdm(total=wait_epochs)
     while True:
         epoch += 1
@@ -210,6 +226,7 @@ def train(train_loader, val_loader, test_loader, model, loss, optimizer, wait_ep
 
     pbar.close()
     model.recover_best()
+    torch.save(model.state_dict(), "results/%s.pt" % (language))
 
     return best_epoch, best_loss, best_acc
 
@@ -241,8 +258,9 @@ def get_avg_shannon_entropy(train_loader, test_loader, token_map):
     return shannon
 
 
-def init_model(model_name, hidden_size, token_map, embedding_size, nlayers, dropout):
-    vocab_size = len(token_map)
+def init_model(model_name, hidden_size, token_map, embedding_size, nlayers, dropout, language, vocab_size=None):
+    if vocab_size is None:
+        vocab_size = len(token_map)
     if model_name == 'lstm':
         model = IpaLM(
             vocab_size, hidden_size, embedding_size=embedding_size, nlayers=nlayers, dropout=dropout).to(device=device)
@@ -250,6 +268,15 @@ def init_model(model_name, hidden_size, token_map, embedding_size, nlayers, drop
         model = PhoibleLM(
             vocab_size, hidden_size, token_map, embedding_size=embedding_size,
             nlayers=nlayers, dropout=dropout).to(device=device)
+        with open("results/%s_params.pickle" % (language), 'wb') as f:
+            pickle.dump({
+                "vocab_size": vocab_size,
+                "hidden_size": hidden_size,
+                "token_map": token_map,
+                "embedding_size": embedding_size,
+                "nlayers": nlayers,
+                "dropout": dropout
+            }, f, pickle.HIGHEST_PROTOCOL)
     elif model_name == 'phoible-lookup':
         model = PhoibleLookupLM(
             vocab_size, hidden_size, token_map, embedding_size=embedding_size,
@@ -263,13 +290,29 @@ def init_model(model_name, hidden_size, token_map, embedding_size, nlayers, drop
 def get_model_entropy(
         lang, model_name, train_loader, val_loader, test_loader, token_map, ipa_to_concept,
         embedding_size, hidden_size, nlayers, dropout, args, wait_epochs=50, per_word=True):
-    model = init_model(model_name, hidden_size, token_map, embedding_size, nlayers, dropout)
+    with open("results/%s_params.pickle" % (lang), 'rb') as f:
+        params = pickle.load(f)
+    model = init_model(
+        model_name,
+        params["hidden_size"],
+        params["token_map"],
+        params["embedding_size"],
+        params["nlayers"],
+        params["dropout"],
+        lang,
+        params["vocab_size"])
 
     loss = nn.CrossEntropyLoss(ignore_index=0).to(device=device)
     optimizer = optim.Adam(model.parameters())
 
-    best_epoch, val_loss, val_acc = train(
-        train_loader, val_loader, test_loader, model, loss, optimizer, wait_epochs=wait_epochs)
+    if args.eval:
+        model.load_state_dict(torch.load(args.statedict, map_location=device))
+        best_epoch = 1
+        val_loss = 1.0
+        val_acc = 1.0
+    else:
+        best_epoch, val_loss, val_acc = train(
+            train_loader, val_loader, test_loader, model, loss, optimizer, lang, wait_epochs=wait_epochs)
     if per_word:
         test_loss, test_acc, _ = eval_per_word(lang, test_loader, model, token_map, ipa_to_concept, model_name, args)
     else:
@@ -281,9 +324,14 @@ def get_model_entropy(
 def _run_language(
         lang, train_loader, val_loader, test_loader, token_map, ipa_to_concept, args,
         embedding_size=None, hidden_size=256, nlayers=1, dropout=0.2, per_word=True):
-    avg_len = get_avg_len(train_loader)
-    shannon = get_avg_shannon_entropy(train_loader, test_loader, token_map)
-    test_shannon = get_avg_shannon_entropy(test_loader, test_loader, token_map)
+    if args.eval:
+        avg_len = 0
+        shannon = 0
+        test_shannon = 0
+    else:
+        avg_len = get_avg_len(train_loader)
+        shannon = get_avg_shannon_entropy(train_loader, test_loader, token_map)
+        test_shannon = get_avg_shannon_entropy(test_loader, test_loader, token_map)
 
     print('Language %s Avg len: %.4f Shanon entropy: %.4f Test shannon: %.4f' % (lang, avg_len, shannon, test_shannon))
 
@@ -297,7 +345,7 @@ def _run_language(
 
 
 def run_language(lang, token_map, ipa_to_concept, args, embedding_size=None, hidden_size=256, nlayers=1, dropout=0.2):
-    train_loader, val_loader, test_loader = get_data_loaders(lang)
+    train_loader, val_loader, test_loader = get_data_loaders(lang, args.eval)
 
     return _run_language(lang, train_loader, val_loader, test_loader, token_map, ipa_to_concept,
                          args, embedding_size=embedding_size, hidden_size=hidden_size,
@@ -323,7 +371,13 @@ def run_language_enveloper(lang, token_map, ipa_to_concept, args):
 
 
 def run_languages(args):
-    languages, token_map, data_split, _, ipa_to_concept = read_info()
+    print(args)
+    if args.eval:
+        f_eval = '_eval'
+        languages, token_map, data_split, _, ipa_to_concept = read_info_eval(args)
+    else:
+        f_eval = ''
+        languages, token_map, data_split, _, ipa_to_concept = read_info()
     print('Train %d, Val %d, Test %d' % (len(data_split[0]), len(data_split[1]), len(data_split[2])))
 
     results = [['lang', 'avg_len', 'shannon', 'test_shannon', 'test_loss',
@@ -336,11 +390,24 @@ def run_languages(args):
             test_acc, best_epoch, val_loss, val_acc = run_language_enveloper(lang, token_map, ipa_to_concept, args)
         results += [[lang, avg_len, shannon, test_shannon, test_loss, test_acc, best_epoch, val_loss, val_acc]]
 
-        write_csv(results, '%s/%s__results.csv' % (args.rfolder, args.model))
-    write_csv(results, '%s/%s__results-final.csv' % (args.rfolder, args.model))
+        write_csv(results, '%s/%s__results%s.csv' % (args.rfolder, args.model, f_eval))
+    write_csv(results, '%s/%s__results-final%s.csv' % (args.rfolder, args.model, f_eval))
 
+def read_info_eval(args):
+    with open(f'datasets/unimorph/{args.language}/preprocess/info.pckl', 'rb') as f:
+        info = pickle.load(f)
+    languages = info['languages']
+    token_map = info['token_map']
+    data_split = info['data_split']
+    concept_ids = info['concepts_ids']
+    ipa_to_concept = info['IPA_to_concept']
+
+    return languages, token_map, data_split, concept_ids, ipa_to_concept
+
+def _eval(args):
+    pass
 
 if __name__ == '__main__':
     args = argparser.parse_args(csv_folder='normal')
-    assert args.data == 'northeuralex', 'this script should only be run with northeuralex data'
+    # assert args.data == 'northeuralex', 'this script should only be run with northeuralex data'
     run_languages(args)

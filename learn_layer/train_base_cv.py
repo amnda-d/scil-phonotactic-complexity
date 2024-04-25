@@ -1,11 +1,12 @@
 import numpy as np
+import pickle
 
 import sys
 sys.path.append('./')
 from data_layer.parse import read_src_data
 from model import opt_params
 from util import argparser
-from train_base import read_info, write_csv, convert_to_loader, _run_language
+from train_base import read_info, write_csv, convert_to_loader, _run_language, _eval
 
 full_results = [['lang', 'fold', 'avg_len', 'test_shannon', 'test_loss',
                  'test_acc', 'val_loss', 'val_acc', 'best_epoch']]
@@ -78,6 +79,15 @@ def run_language_cv(lang, token_map, concept_ids, ipa_to_concept, args, embeddin
                     hidden_size=256, nlayers=1, dropout=0.2):
     global full_results, fold
     nfolds = 10
+    with open("results/%s_params.pickle" % (lang), 'wb') as f:
+        pickle.dump({
+            "vocab_size": len(token_map),
+            "hidden_size": hidden_size,
+            "token_map": token_map,
+            "embedding_size": embedding_size,
+            "nlayers": nlayers,
+            "dropout": dropout
+        }, f, pickle.HIGHEST_PROTOCOL)
     avg_shannon, avg_test_shannon, avg_test_loss, avg_test_acc, avg_val_loss, avg_val_acc = 0, 0, 0, 0, 0, 0
     for fold in range(nfolds):
         print()
@@ -138,5 +148,5 @@ def run_languages(args):
 
 if __name__ == '__main__':
     args = argparser.parse_args(csv_folder='cv')
-    assert args.data == 'northeuralex', 'this script should only be run with northeuralex data'
+    # assert args.data == 'northeuralex', 'this script should only be run with northeuralex data'
     run_languages(args)
