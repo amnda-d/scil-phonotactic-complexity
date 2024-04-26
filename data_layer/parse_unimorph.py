@@ -10,7 +10,7 @@ from util import util
 
 
 def read_src_data(language):
-    filename = '../eval2/data/g2p/%s.tsv' % language
+    filename = '../data/g2p/%s.tsv' % language
     df = pd.read_csv(filename, sep='\t', names=['base', 'baseIPA', 'Concept', 'IPA', 'type'])
     # del df['Glottocode']
     df.insert(5, 'Language_ID', language)
