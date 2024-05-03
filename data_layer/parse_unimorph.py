@@ -169,7 +169,7 @@ def load_info(args):
     return languages, token_map, data_split, concept_ids, ipa_to_concept
 
 def load_base_info(args):
-    with open('datasets/northeuralex/preprocess/info.pckl', 'rb') as f:
+    with open(f'datasets/northeuralex/{args.language}/preprocess/info.pckl', 'rb') as f:
         info = pickle.load(f)
     languages = info['languages']
     token_map = info['token_map']

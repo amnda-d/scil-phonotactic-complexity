@@ -17,9 +17,9 @@ def get_lang_df(lang, ffolder):
     return df[df['Language_ID'] == lang]
 
 
-def get_data_loaders_cv(ffolder, fold, nfolds, lang, token_map, concept_ids, verbose=True):
+def get_data_loaders_cv(args, ffolder, fold, nfolds, lang, token_map, concept_ids, verbose=True):
     global data_split
-    data_split = get_data_split_cv(fold, nfolds, verbose=verbose)
+    data_split = get_data_split_cv(args, fold, nfolds, verbose=verbose)
     df = get_lang_df(lang, ffolder)
 
     train_loader = get_data_loader(df, data_split[0], token_map, 'train', concept_ids)
@@ -29,8 +29,8 @@ def get_data_loaders_cv(ffolder, fold, nfolds, lang, token_map, concept_ids, ver
     return train_loader, val_loader, test_loader
 
 
-def get_data_split_cv(fold, nfolds, verbose=True):
-    _, _, data_split, _, _ = read_info()
+def get_data_split_cv(args, fold, nfolds, verbose=True):
+    _, _, data_split, _, _ = read_info(args)
     concepts = [y for x in data_split for y in x]
 
     return _get_data_split_cv(fold, nfolds, concepts, verbose=verbose)
@@ -94,7 +94,7 @@ def run_language_cv(lang, token_map, concept_ids, ipa_to_concept, args, embeddin
         print('Fold:', fold, end=' ')
 
         train_loader, val_loader, test_loader = get_data_loaders_cv(
-            args.ffolder, fold, nfolds, lang, token_map, concept_ids)
+            args, args.ffolder, fold, nfolds, lang, token_map, concept_ids)
         avg_len, shannon, test_shannon, test_loss, \
             test_acc, best_epoch, val_loss, val_acc = _run_language(
                 lang, train_loader, val_loader, test_loader, token_map, ipa_to_concept,
@@ -126,7 +126,7 @@ def run_opt_language_cv(lang, token_map, concept_ids, ipa_to_concept, args):
 
 
 def run_languages(args):
-    languages, token_map, data_split, concept_ids, ipa_to_concept = read_info()
+    languages, token_map, data_split, concept_ids, ipa_to_concept = read_info(args)
     print('Train %d, Val %d, Test %d' % (len(data_split[0]), len(data_split[1]), len(data_split[2])))
 
     results = [['lang', 'avg_len', 'shannon', 'test_shannon', 'test_loss', 'test_acc', 'val_loss', 'val_acc']]

@@ -62,8 +62,8 @@ def write_csv(results, filename):
         writer.writerows(results)
 
 
-def read_info():
-    with open('datasets/northeuralex/preprocess/info.pckl', 'rb') as f:
+def read_info(args):
+    with open(f'datasets/northeuralex/{args.language}/preprocess/info.pckl', 'rb') as f:
         info = pickle.load(f)
     languages = info['languages']
     token_map = info['token_map']
@@ -377,7 +377,7 @@ def run_languages(args):
         languages, token_map, data_split, _, ipa_to_concept = read_info_eval(args)
     else:
         f_eval = ''
-        languages, token_map, data_split, _, ipa_to_concept = read_info()
+        languages, token_map, data_split, _, ipa_to_concept = read_info(args)
     print('Train %d, Val %d, Test %d' % (len(data_split[0]), len(data_split[1]), len(data_split[2])))
 
     results = [['lang', 'avg_len', 'shannon', 'test_shannon', 'test_loss',

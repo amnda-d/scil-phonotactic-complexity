@@ -163,7 +163,9 @@ def load_info(args):
 
 def main(args):
     df = read_src_data(args.ffolder)
+    df = df[df.Language_ID == args.language]
     print(df)
+    args.ffolder = args.ffolder + '/' + args.language
 
     languages = get_languages(df)
     train_df, val_df, test_df, data_split = separate_train(df)
