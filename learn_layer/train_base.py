@@ -168,7 +168,7 @@ def eval_per_word(lang, data_loader, model, token_map, ipa_to_concept, model_nam
         feval = '-eval'
     else:
         feval = ''
-        lang = ''
+        Path('%s/%s' % (args.rfolder, lang)).mkdir(parents=True, exist_ok=True)
 
     write_csv(results_per_position, '%s/%s/%s__results-per-position%s.csv' % (args.rfolder, lang, model_name, feval))
     write_csv(results_per_position_per_word, '%s/%s/%s__results-per-position-per-word%s.csv' % (args.rfolder, lang, model_name, feval))
