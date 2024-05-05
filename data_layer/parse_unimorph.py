@@ -126,13 +126,20 @@ def parse_data(df, token_map):
     data = np.zeros((df.shape[0], max_len + 3))
 
     for i, (index, x) in enumerate(df.iterrows()):
+        instance = x.IPA.split(' ')
+        instance = [ipa for ipa in instance if ipa != '']
         try:
-            instance = x.IPA.split(' ')
+            for ipa in instance:
+                if ipa not in token_map:
+                    if ipa[-1] in  ['ː', ':', ] and ipa[:-1] in token_map:
+                        instance = [x[:-1] for x in instance if x == ipa]
+                    else:
+                        raise KeyError(ipa)
             data[i, 0] = 1
             data[i, 1:len(instance) + 1] = [token_map[z] for z in instance]
             data[i, len(instance) + 1] = 2
             data[i, -1] = index
-        except:
+        except KeyError as e:
             continue
 
     return data

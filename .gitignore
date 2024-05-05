@@ -109,3 +109,5 @@ datasets/northeuralex/orig.csv.tar.gz
 datasets/northeuralex/preprocess
 results/
 plot/
+datasets/northeuralex
+datasets/unimorph
