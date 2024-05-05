@@ -131,7 +131,7 @@ def parse_data(df, token_map):
         try:
             for ipa in instance:
                 if ipa not in token_map:
-                    if ipa[-1] in  ['ː', ':', ] and ipa[:-1] in token_map:
+                    if ipa[-1] in  ['ː', ':'] and ipa[:-1] in token_map:
                         instance = [x[:-1] for x in instance if x == ipa]
                     else:
                         raise KeyError(ipa)
