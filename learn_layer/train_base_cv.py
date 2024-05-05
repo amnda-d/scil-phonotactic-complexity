@@ -142,8 +142,8 @@ def run_languages(args):
                 test_acc, val_loss, val_acc = run_language_cv(lang, token_map, concept_ids, ipa_to_concept, args)
         results += [[lang, avg_len, shannon, test_shannon, test_loss, test_acc, val_loss, val_acc]]
 
-        write_csv(results, '%s/%s__results.csv' % (args.rfolder, args.model))
-    write_csv(results, '%s/%s__results-final.csv' % (args.rfolder, args.model))
+        write_csv(results, '%s/%s/%s__results.csv' % (args.rfolder, args.language, args.model))
+    write_csv(results, '%s/%s/%s__results-final.csv' % (args.rfolder, args.language, args.model))
 
 
 if __name__ == '__main__':
